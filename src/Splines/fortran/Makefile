@@ -1,11 +1,14 @@
 #include ../install/DEFAULTS.inc
 
 # === CONFIGURABLE ===
-FC = gfortran  # You can override this: `make FC=ifort`
-FFLAGS ?= -fPIC
+FC = gfortran  
+#FFLAGS ?= -fPIC
+#for debug
+FFLAGS ?= -fPIC  -g -O0 -fcheck=all -fbacktrace
 LDFLAGS ?= -shared
-LIBS ?= -framework Accelerate
-OUTLIB = libspline.dylib
+#LIBS ?= -framework Accelerate 
+LIBS ?= -llapack -lblas
+OUTLIB = libspline.dll
 RECURSFLAG ?= -frecursive
 
 F90 = $(FC) $(FFLAGS) $(RECURSFLAG)
@@ -30,7 +33,7 @@ $(OUTLIB): $(OBJS)
 	mv $(OUTLIB) ../../../deps/
 
 clean:
-	rm -f *.o *.mod *.original *.dylib
+	rm -f *.o *.mod *.original *.dylib *.dll
 
 # dependencies
 

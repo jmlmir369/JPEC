@@ -147,10 +147,10 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     declarations.
 c-----------------------------------------------------------------------
-      SUBROUTINE bicube_fit(bcs,endmode1,endmode2)
+      SUBROUTINE bicube_fit(bcs,int_endmode1,int_endmode2)
 
       TYPE(bicube_type), INTENT(INOUT), TARGET :: bcs
-      CHARACTER(*), INTENT(IN) :: endmode1,endmode2
+      INTEGER, INTENT(IN) :: int_endmode1,int_endmode2
 
       INTEGER :: iqty,iside,ix,iy
       REAL(r8), DIMENSION(0:bcs%mx) :: xfac
@@ -194,7 +194,7 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     set periodicity.
 c-----------------------------------------------------------------------
-      bcs%periodic=(/endmode1 == "periodic",endmode2 == "periodic"/)
+      bcs%periodic=(/int_endmode1 == 2,int_endmode2 == 2/)
       IF(bcs%periodic(1))bcs%fs(bcs%mx,:,:)=bcs%fs(0,:,:)
       IF(bcs%periodic(2))bcs%fs(:,bcs%my,:)=bcs%fs(:,0,:)
 c-----------------------------------------------------------------------
@@ -204,7 +204,7 @@ c-----------------------------------------------------------------------
       spl%xs=bcs%ys
       DO iqty=1,bcs%nqty
          spl%fs=TRANSPOSE(bcs%fs(:,:,iqty))
-         CALL spline_fit(spl,endmode2)
+         CALL spline_fit(spl,int_endmode2)
          bcs%fsy(:,:,iqty)=TRANSPOSE(spl%fs1)
       ENDDO
       CALL spline_dealloc(spl)
@@ -217,7 +217,7 @@ c-----------------------------------------------------------------------
       spl%xs=bcs%xs
       DO iqty=1,bcs%nqty
          spl%fs=bcs%fs(:,:,iqty)
-         CALL spline_fit(spl,endmode1)
+         CALL spline_fit(spl,int_endmode1)
          bcs%fsx(:,:,iqty)=spl%fs1
       ENDDO
 c-----------------------------------------------------------------------
@@ -225,7 +225,7 @@ c     evaluate mixed derivatives.
 c-----------------------------------------------------------------------
       DO iqty=1,bcs%nqty
          spl%fs=bcs%fsy(:,:,iqty)
-         CALL spline_fit(spl,endmode1)
+         CALL spline_fit(spl,int_endmode1)
          bcs%fsxy(:,:,iqty)=spl%fs1
       ENDDO
       CALL spline_dealloc(spl)

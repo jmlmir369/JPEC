@@ -3,7 +3,11 @@ module CubicSpline
 const libdir = joinpath(@__DIR__, "..", "..", "deps")
 const libspline = joinpath(libdir, "libspline")
 
+
+
 export spline_setup, spline_eval
+
+
 
 abstract type CubicSplineType end
 
@@ -27,32 +31,33 @@ mutable struct ComplexSplineType <: CubicSplineType
     bctype::Int32  # Boundary condition type
 end
 
+
 function _MakeSpline(mx::Int64, nqty::Int64)
 	h = Ref{Ptr{Cvoid}}()
 	ccall((:spline_c_create, libspline), Cvoid,
-		(Int64, Int64, Ref{Ptr{Cvoid}}), mx, nqty, h)
-	return RealSplineType(h[], Vector{Float64}(undef, mx), Matrix{Float64}(undef, mx, nqty), mx, nqty, 0, 0)
+		(Int64, Int64, Ref{Ptr{Cvoid}}), Int64(mx), Int64(nqty), h)
+	return RealSplineType(h[], Vector{Float64}(undef, mx+1), Matrix{Float64}(undef, mx+1, nqty), mx, nqty, 0, 0)
 end
 
 function _MakeCSpline(mx::Int64, nqty::Int64)
-	h = Ref{Ptr{Cvoid}}()
+	h = Ref{Ptr{Cvoid}}() 
 	ccall((:cspline_c_create, libspline), Cvoid,
-		(Int64, Int64, Ref{Ptr{Cvoid}}), mx, nqty, h)
-	return ComplexSplineType(h[], Vector{Float64}(undef, mx), Matrix{ComplexF64}(undef, mx, nqty), mx, nqty, 0, 0)
+		(Int64, Int64, Ref{Ptr{Cvoid}}), Int64(mx), Int64(nqty), h)
+	return RealSplineType(h[], Vector{Float64}(undef, mx+1), Matrix{Float64}(undef, mx+1, nqty), mx, nqty, 0, 0)
 end
 
 function _spline_setup(xs::Vector{Float64}, fs::Vector{Float64}, bctype::Int32)
 	# xs -> Float64 (mx)
 	# fs -> Float64 (mx, nqty)
 	if length(xs) != length(fs)
-		error("Length of xs must match length of fs")
+		error("Length of xs must matPtr{Cvoid} length of fs")
 	end
 	mx = length(xs)-1
 	nqty = 1  # Default to 1 quantity if not specified
 	spline = _MakeSpline(mx, nqty)
 	spline.xs = xs
 	# Convert fs to a matrix with one column
-	fs_matrix = reshape(fs, mx, nqty)
+	fs_matrix = reshape(fs, mx+1, nqty)
 	spline.fs = fs_matrix
     spline.bctype = Int32(bctype)
 

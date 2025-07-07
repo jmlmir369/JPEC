@@ -101,6 +101,8 @@ c     terminate.
 c-----------------------------------------------------------------------
       return
       end subroutine spline_c_destroy
+
+
 c-----------------------------------------------------------------------
 c     subprogram 3. spline_c_setup
 c     sets up the spline object with data.
@@ -113,9 +115,9 @@ c-----------------------------------------------------------------------
       type(c_ptr), value :: xs, fs
 
       type(spline_type), pointer :: spl
-      real(c_double), pointer :: x(:), f(:, :)
-      integer(i8) :: mx, nqty
-      integer(i8) :: i
+      real(c_double), pointer :: x_ptr(:), f_ptr(:,:)
+      integer :: mx, nqty
+      integer :: i, j
 c-----------------------------------------------------------------------
 c     work.
 c-----------------------------------------------------------------------
@@ -129,32 +131,27 @@ c-----------------------------------------------------------------------
       mx = spl%mx
       nqty = spl%nqty
 
-      call c_f_pointer(xs, x, [mx+1])
-      call c_f_pointer(fs, f, [mx+1, nqty])
+      ! For 1D arrays, layout is the same, this is fine.
+      call c_f_pointer(xs, x_ptr, [mx+1])
+      spl%xs(0:mx) = x_ptr(1:mx+1) ! Use array slice for cleaner copy
 
-      ! do i = 0, mx
-      !    spl%xs(i) = x(i+1)  ! Fortran is 1-based, C is 0-based
-      !    spl%fs(i, 1:nqty) = f(i+1, 1:nqty)
-      ! end do
+      call c_f_pointer(fs, f_ptr, [mx+1, nqty])
 
-      spl%xs = x
-      spl%fs = f
-
-      if (debug) then
-         print *, "spline_c_setup: setting up spline with "
-     $       // "mx = ", mx, " and nqty = ", nqty
-         print *, "xs = ", x(1:mx+1)
-         print *, "fs = "
-     $       // "(", nqty, " quantities):"
-         do i = 1, nqty
-            print *, "  fs(:,", i, ") = ", f(:, i)
-         end do
-      end if
+      spl%fs = f_ptr
+      ! Now we copy the data, swapping the indices to match.
+c      do j = 1, nqty
+c         do i = 0, mx
+c            spl%fs(i, j) = f_ptr(i+1, j)
+c         end do
+c      end do
+      
 c------------------------------------------------------------------------
 c     terminate.
 c------------------------------------------------------------------------
       return 
       end subroutine spline_c_setup
+
+
 c-----------------------------------------------------------------------
 c     subprogram 4. spline_c_fit
 c     fits the spline to the data.
@@ -167,7 +164,7 @@ c-----------------------------------------------------------------------
       integer(c_int), value :: endmode
       type(spline_type), pointer :: spl
 
-      character(10) :: endmode_str
+      character(len=12) :: endmode_str
 c-----------------------------------------------------------------------
 c     work.
 c-----------------------------------------------------------------------
@@ -192,7 +189,8 @@ c-----------------------------------------------------------------------
          print *, "spline_c_fit: fitting spline with endmode = "
      $       // TRIM(endmode_str)
       end if
-      call spline_fit(spl, TRIM(endmode_str))
+      call spline_fit(spl, endmode)
+      print *, "@@@@"
 c-----------------------------------------------------------------------
 c     terminate.
 c-----------------------------------------------------------------------
@@ -290,11 +288,11 @@ c-----------------------------------------------------------------------
       return
       end subroutine spline_c_eval_deriv
 c-----------------------------------------------------------------------
-c     subprogram 7. spline_c_eval_deriv_2
+c     subprogram 7. spline_c_eval_deriv2
 c     evaluates the spline and its first and\
 c     second derivatives at a given point.
 c-----------------------------------------------------------------------
-      subroutine spline_c_eval_deriv_2(handle, x, f, f1,
+      subroutine spline_c_eval_deriv2(handle, x, f, f1,
      $     f2, ix_op) bind(C)
 c-----------------------------------------------------------------------
 c     declarations.
@@ -339,12 +337,12 @@ c-----------------------------------------------------------------------
 c     terminate.
 c-----------------------------------------------------------------------
       return
-      end subroutine spline_c_eval_deriv_2
+      end subroutine spline_c_eval_deriv2
 c-----------------------------------------------------------------------
-c     subprogram 8. spline_c_eval_deriv_3
+c     subprogram 8. spline_c_eval_deriv3
 c     evaluates the spline and its first derivative at a given point.
 c-----------------------------------------------------------------------
-      subroutine spline_c_eval_deriv_3(handle, x, f, f1,
+      subroutine spline_c_eval_deriv3(handle, x, f, f1,
      $    f2, f3, ix_op) bind(C)
 c-----------------------------------------------------------------------
 c     declarations.
@@ -391,7 +389,7 @@ c-----------------------------------------------------------------------
 c     terminate.
 c-----------------------------------------------------------------------
       return
-      end subroutine spline_c_eval_deriv_3
+      end subroutine spline_c_eval_deriv3
 
 
 c-----------------------------------------------------------------------
@@ -444,6 +442,7 @@ c     terminate.
 c-----------------------------------------------------------------------
       return
       end subroutine cspline_c_destroy
+
 c-----------------------------------------------------------------------
 c     subprogram 11. cspline_c_setup
 c     sets up the spline object with data.
@@ -456,10 +455,10 @@ c-----------------------------------------------------------------------
       type(c_ptr), value :: xs, fs
 
       type(cspline_type), pointer :: cspl
-      real(c_double), pointer :: x(:)
-      complex(c_double), pointer :: f(:, :)
-      integer(i8) :: mx, nqty
-      integer(i8) :: i
+      real(c_double), pointer :: x_ptr(:)
+      complex(c_double_complex), pointer :: f_ptr(:, :)
+      integer :: mx, nqty
+      integer :: i, j
 c-----------------------------------------------------------------------
 c     work.
 c-----------------------------------------------------------------------
@@ -473,27 +472,19 @@ c-----------------------------------------------------------------------
       mx = cspl%mx
       nqty = cspl%nqty
 
-      call c_f_pointer(xs, x, [mx+1])
-      call c_f_pointer(fs, f, [mx+1, nqty])
-
-      cspl%xs = x
-      cspl%fs = f
-
-      if (debug) then
-         print *, "cspline_c_setup: setting up spline with "
-     $       // "mx = ", mx, " and nqty = ", nqty
-         print *, "xs = ", x(1:mx+1)
-         print *, "fs = "
-     $       // "(", nqty, " quantities):"
-         do i = 1, nqty
-            print *, "  fs(:,", i, ") = ", f(:, i)
-         end do
-      end if
+      call c_f_pointer(xs, x_ptr, [mx+1])
+      call c_f_pointer(fs, f_ptr, [mx+1, nqty])
+      
+      cspl%xs = x_ptr
+      cspl%fs = f_ptr
+      
 c------------------------------------------------------------------------
 c     terminate.
 c------------------------------------------------------------------------
       return 
       end subroutine cspline_c_setup
+
+
 c-----------------------------------------------------------------------
 c     subprogram 12. spline_c_fit
 c     fits the spline to the data.
@@ -629,11 +620,11 @@ c-----------------------------------------------------------------------
       return
       end subroutine cspline_c_eval_deriv
 c-----------------------------------------------------------------------
-c     subprogram 15. cspline_c_eval_deriv_2
+c     subprogram 15. cspline_c_eval_deriv2
 c     evaluates the spline and its first and\
 c     second derivatives at a given point.
 c-----------------------------------------------------------------------
-      subroutine cspline_c_eval_deriv_2(handle, x, f, f1,
+      subroutine cspline_c_eval_deriv2(handle, x, f, f1,
      $     f2, ix_op) bind(C)
 c-----------------------------------------------------------------------
 c     declarations.
@@ -678,12 +669,12 @@ c-----------------------------------------------------------------------
 c     terminate.
 c-----------------------------------------------------------------------
       return
-      end subroutine cspline_c_eval_deriv_2
+      end subroutine cspline_c_eval_deriv2
 c-----------------------------------------------------------------------
-c     subprogram 16. cspline_c_eval_deriv_3
+c     subprogram 16. cspline_c_eval_deriv3
 c     evaluates the spline and its first derivative at a given point.
 c-----------------------------------------------------------------------
-      subroutine cspline_c_eval_deriv_3(handle, x, f, f1,
+      subroutine cspline_c_eval_deriv3(handle, x, f, f1,
      $    f2, f3, ix_op) bind(C)
 c-----------------------------------------------------------------------
 c     declarations.
@@ -730,7 +721,7 @@ c-----------------------------------------------------------------------
 c     terminate.
 c-----------------------------------------------------------------------
       return
-      end subroutine cspline_c_eval_deriv_3
+      end subroutine cspline_c_eval_deriv3
 
 c-----------------------------------------------------------------------
 c     Bicubic Spline API
@@ -781,6 +772,7 @@ c     terminate.
 c-----------------------------------------------------------------------
       return
       end subroutine bicube_c_destroy
+
 c-----------------------------------------------------------------------
 c     subprogram 19. bicube_c_setup
 c     sets up the bicubic spline object with data.
@@ -793,9 +785,8 @@ c-----------------------------------------------------------------------
       type(c_ptr), value :: xs, ys, fs
 
       type(bicube_type), pointer :: bicube
-      real(c_double), pointer :: x(:), y(:), f(:, :, :)
-      integer(i8) :: mx, my, nqty
-      integer(i8) :: i
+      real(c_double), pointer :: x_ptr(:), y_ptr(:), f_ptr(:, :, :)
+      integer :: i, j, k
 c-----------------------------------------------------------------------
 c     work.
 c-----------------------------------------------------------------------
@@ -806,32 +797,43 @@ c-----------------------------------------------------------------------
          return
       end if
 
-      mx = bicube%mx
-      my = bicube%my
-      nqty = bicube%nqty
+      ! Create 1-based Fortran pointers to the C memory from Julia
+      call c_f_pointer(xs, x_ptr, [bicube%mx + 1])
+      call c_f_pointer(ys, y_ptr, [bicube%my + 1])
+      call c_f_pointer(fs, f_ptr, [bicube%mx + 1
+     $      , bicube%my + 1, bicube%nqty])
 
-      call c_f_pointer(xs, x, [mx+1])
-      call c_f_pointer(ys, y, [my+1])
-      call c_f_pointer(fs, f, [mx+1, my+1, nqty])
+      ! Explicitly copy from the 1-based pointers to the 0-based arrays
+      bicube%xs = x_ptr
+      bicube%ys = y_ptr
+      bicube%fs = f_ptr
 
-      ! do i = 0, mx
-      !    spl%xs(i) = x(i+1)  ! Fortran is 1-based, C is 0-based
-      !    spl%fs(i, 1:nqty) = f(i+1, 1:nqty)
-      ! end do
 
-      bicube%xs = x
-      bicube%ys = y
-      bicube%fs = f
-
+c      do i = 0, bicube%mx
+c         bicube%xs(i) = x_ptr(i + 1)
+c      end do
+c      
+c      do j = 0, bicube%my
+c         bicube%ys(j) = y_ptr(j + 1)
+c      end do
+c      
+c      do k = 1, bicube%nqty
+c         do j = 0, bicube%my
+c            do i = 0, bicube%mx
+c               bicube%fs(i, j, k) = f_ptr(i + 1, j + 1, k)
+c            end do
+c         end do
+c      end do
+c
       if (debug) then
          print *, "bicube_c_setup: setting up bicubic spline with "
-     $       // "mx = ", mx, ", my = ", my, " and nqty = ", nqty
-         print *, "xs = ", x(1:mx+1)
-         print *, "ys = ", y(1:my+1)
+     $       // "mx = ", bicube%mx, ", my = ", bicube%my, " and nqty = ", bicube%nqty
+         print *, "xs = ", bicube%xs(0:bicube%mx)
+         print *, "ys = ", bicube%ys(0:bicube%my)
          print *, "fs = "
-     $       // "(", nqty, " quantities):"
-         do i = 1, nqty
-            print *, "  fs(:,:,", i, ") = ", f(:,:,i)
+     $       // "(", bicube%nqty, " quantities):"
+         do i = 1, bicube%nqty
+            print *, "  fs(:,:,", i, ") = ", bicube%fs(:,:,i)
          end do
       end if
 c------------------------------------------------------------------------
@@ -839,6 +841,8 @@ c     terminate.
 c------------------------------------------------------------------------
       return
       end subroutine bicube_c_setup
+
+
 c-----------------------------------------------------------------------
 c     subprogram 20. bicube_c_fit
 c     fits the bicubic spline to the data.
@@ -888,7 +892,7 @@ c-----------------------------------------------------------------------
      $       // TRIM(endmode1_str) // " and endmode2 = "
      $       // TRIM(endmode2_str)
       end if
-      call bicube_fit(bicube, TRIM(endmode1_str), TRIM(endmode2_str))
+      call bicube_fit(bicube, endmode1, endmode2)
 c-----------------------------------------------------------------------
 c     terminate.
 c-----------------------------------------------------------------------

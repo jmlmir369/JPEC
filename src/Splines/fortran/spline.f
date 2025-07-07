@@ -142,19 +142,22 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     declarations.
 c-----------------------------------------------------------------------
-      SUBROUTINE spline_fit(spl,endmode)
+      SUBROUTINE spline_fit(spl,endmode_int)
 
       TYPE(spline_type), INTENT(INOUT) :: spl
-      CHARACTER(*), INTENT(IN) :: endmode
+      INTEGER, INTENT(IN) :: endmode_int
 c-----------------------------------------------------------------------
 c     switch between two spline_fit.
 c-----------------------------------------------------------------------
-      IF (use_classic_splines .AND.
-     $    (endmode.EQ."extrap".OR.endmode.EQ."natural"))THEN
-         CALL spline_fit_classic(spl,endmode)
-      ELSE
-         CALL spline_fit_ahg(spl,endmode)
-      ENDIF
+c      IF (use_classic_splines .AND.
+c     $    (endmode_int == 1 .OR. endmode_int == 4))THEN
+c     1, 4 is respectively natural, not-a-knot
+c      IF (.FALSE.)
+c         CALL spline_fit_classic(spl,endmode_int)
+c      ELSE
+      CALL spline_fit_ahg(spl,endmode_int)
+c      ENDIF
+      print *, "**&&&**"
 c-----------------------------------------------------------------------
 c     terminate.
 c-----------------------------------------------------------------------
@@ -167,16 +170,22 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     declarations.
 c-----------------------------------------------------------------------
-      SUBROUTINE spline_fit_ahg(spl,endmode)
+      SUBROUTINE spline_fit_ahg(spl,endmode_int)
 
       TYPE(spline_type), INTENT(INOUT) :: spl
-      CHARACTER(*), INTENT(IN) :: endmode
+      INTEGER, INTENT(IN) :: endmode_int
 
       INTEGER :: iqty,iside
       REAL(r8), DIMENSION(-1:1,0:spl%mx) :: a
       REAL(r8), DIMENSION(spl%mx) :: b
       REAL(r8), DIMENSION(4) :: cl,cr
       REAL(r8), DIMENSION(0:spl%mx) :: xfac
+
+      REAL(r8), DIMENSION(-1:1, spl%mx-1) :: a_temp_trilus
+      REAL(r8), DIMENSION(spl%mx-1, spl%nqty) :: fs1_temp_trilus
+      REAL(r8), DIMENSION(-1:1, spl%mx) :: a_temp_morrison
+      REAL(r8), DIMENSION(spl%mx, spl%nqty) :: fs1_temp_morrison
+
 c-----------------------------------------------------------------------
 c     extract powers.
 c-----------------------------------------------------------------------
@@ -191,7 +200,7 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     set up grid matrix.
 c-----------------------------------------------------------------------
-      CALL spline_fac(spl,a,b,cl,cr,endmode)
+      CALL spline_fac(spl,a,b,cl,cr,endmode_int)
 c-----------------------------------------------------------------------
 c     compute first derivatives, interior.
 c-----------------------------------------------------------------------
@@ -205,8 +214,8 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     extrapolation boundary conditions.
 c-----------------------------------------------------------------------
-      SELECT CASE(endmode)
-      CASE("extrap")
+      SELECT CASE(endmode_int)
+      CASE(3)
          DO iqty=1,spl%nqty
             spl%fs1(0,iqty)=SUM(cl(1:4)*spl%fs(0:3,iqty))
             spl%fs1(spl%mx,iqty)=SUM(cr(1:4)
@@ -221,7 +230,7 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     not-a-knot boundary conditions.
 c-----------------------------------------------------------------------
-      CASE("not-a-knot")
+      CASE(4)
          spl%fs1(1,:)=spl%fs1(1,:)-(2*spl%fs(1,:)
      $        -spl%fs(0,:)-spl%fs(2,:))*2*b(1)
          spl%fs1(spl%mx-1,:)=spl%fs1(spl%mx-1,:)
@@ -242,17 +251,31 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     periodic boudary conditions.
 c-----------------------------------------------------------------------
-      CASE("periodic")
+      CASE(2)
          spl%periodic=.TRUE.
          spl%fs1(0,:)=3*((spl%fs(1,:)-spl%fs(0,:))*b(1)
      $        +(spl%fs(0,:)-spl%fs(spl%mx-1,:))*b(spl%mx))
-         CALL spline_morrison(a(:,0:spl%mx-1),spl%fs1(0:spl%mx-1,:))
-         spl%fs1(spl%mx,:)=spl%fs1(0,:)
+c         CALL spline_morrison(a(:,0:spl%mx-1),spl%fs1(0:spl%mx-1,:))
+c         spl%fs1(spl%mx,:)=spl%fs1(0,:)         
+         print *, "******"
+         a_temp_morrison = a(:, 0:spl%mx-1)
+         fs1_temp_morrison = spl%fs1(0:spl%mx-1, :)
+         
+         CALL spline_morrison(a_temp_morrison, fs1_temp_morrison)
+         
+         spl%fs1(0:spl%mx-1, :) = fs1_temp_morrison
+          DO iqty = 1, spl%nqty
+            PRINT *, "  nqty =", iqty
+            PRINT '(10(E15.7, 1X))', fs1_temp_morrison(:, iqty)
+         ENDDO
+         print *, "!!!!!!"
 c-----------------------------------------------------------------------
 c     unrecognized boundary condition.
 c-----------------------------------------------------------------------
       CASE DEFAULT
-         CALL program_stop("Cannot recognize endmode = "//TRIM(endmode))
+         PRINT *, "Error: Cannot recognize endmode_int = "
+     $    , endmode_int
+         CALL program_stop("Cannot recognize endmode")
       END SELECT
 c-----------------------------------------------------------------------
 c     terminate.
@@ -268,9 +291,9 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     declarations.
 c-----------------------------------------------------------------------
-      SUBROUTINE spline_fit_classic(spl,endmode)
+      SUBROUTINE spline_fit_classic(spl,endmode_int)
       TYPE(spline_type), INTENT(INOUT) :: spl
-      CHARACTER(*), INTENT(IN) :: endmode
+      INTEGER, INTENT(IN) :: endmode_int
       REAL(r8), DIMENSION(:),ALLOCATABLE :: d,l,u,h
       REAL(r8), DIMENSION(:,:),ALLOCATABLE :: r
       REAL(r8), DIMENSION(0:spl%mx) :: xfac
@@ -320,7 +343,7 @@ c-----------------------------------------------------------------------
       ENDDO
       r(spl%mx,:)=0
 
-      IF (endmode=="extrap") THEN
+      IF (endmode_int==3) THEN
          CALL spline_get_yp(spl%xs(0:3),spl%fs(0:3,:),
      $                      spl%xs(0),r(0,:),spl%nqty)
          CALL spline_get_yp(spl%xs(spl%mx-3:spl%mx),
@@ -370,9 +393,9 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     declarations.
 c-----------------------------------------------------------------------
-      SUBROUTINE spline_fit_ha(spl,endmode)
+      SUBROUTINE spline_fit_ha(spl,endmode_int)
       TYPE(spline_type), INTENT(INOUT) :: spl
-      CHARACTER(*), INTENT(IN) :: endmode
+      INTEGER, INTENT(IN) :: endmode_int
 
       INTEGER ::icount,icoef,imx,iqty,istart,jstart,info,iside
       INTEGER :: ndim,nqty,kl,ku,ldab,nvar
@@ -509,11 +532,11 @@ c-----------------------------------------------------------------------
       locmat1(5,5)=1
       locmat1(5,nvar+5)=-1
 
-      SELECT CASE(endmode)
+      SELECT CASE(endmode_int)
 c-----------------------------------------------------------------------
 c     not-a-knot boundary conditions.
 c-----------------------------------------------------------------------
-      CASE("not-a-knot")
+      CASE(4)
          locmat0(1,nvar+1)=6
          locmat0(1,2*nvar+1)=-6
          locmat0(5,nvar+5)=1
@@ -528,7 +551,7 @@ c-----------------------------------------------------------------------
 c     extrap boudary conditions, use first and last four points to
 c     calculate y'(0) and y'(1).
 c-----------------------------------------------------------------------
-      CASE("extrap")
+      CASE(3)
          locmat0(1,nvar+3)=1
          CALL spline_get_yp(spl%xs(0:3),spl%fs(0:3,:),
      $                      spl%xs(0),locrhs0(1,:),nqty)
@@ -548,7 +571,7 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     natural boudary conditions.
 c-----------------------------------------------------------------------
-      CASE("natural")
+      CASE(1)
          locmat0(1,nvar+2)=2
 
          locmat0(5,nvar+5)=1
@@ -563,7 +586,7 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     periodic boudary conditions.
 c-----------------------------------------------------------------------
-      CASE("periodic")
+      CASE(2)
 c-----------------------------------------------------------------------
 c     s'0(x0)=s'm-1(xm).
 c-----------------------------------------------------------------------
@@ -571,8 +594,8 @@ c-----------------------------------------------------------------------
             IF (ABS(spl%fs(0,iqty)-spl%fs(spl%mx,iqty)) > 1E-15) THEN
                WRITE(*,*)
      $             "Warning: first and last points are different.
-     $              IQTY= ",IQTY,",  averaged value is used."//
-     $              TRIM(endmode)
+     $              IQTY= ",IQTY,",  averaged value is used.",
+     $              endmode_int
               spl%fs(0,iqty)=(spl%fs(0,iqty)+spl%fs(spl%mx,iqty))*0.5
               spl%fs(spl%mx,iqty)=spl%fs(0,iqty)
             ENDIF
@@ -599,8 +622,9 @@ c-----------------------------------------------------------------------
 c     unrecognized boundary condition.
 c-----------------------------------------------------------------------
       CASE DEFAULT
-         CALL program_stop
-     $       ("Cannot recognize endmode = "//TRIM(endmode))
+         PRINT *, "Error: Cannot recognize endmode_int = "
+     $    , endmode_int
+         CALL program_stop("Cannot recognize endmode")
       END SELECT
 c-----------------------------------------------------------------------
 c     fill global matrix at x0
@@ -661,13 +685,13 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     declarations.
 c-----------------------------------------------------------------------
-      SUBROUTINE spline_fac(spl,a,b,cl,cr,endmode)
+      SUBROUTINE spline_fac(spl,a,b,cl,cr,endmode_int)
 
       TYPE(spline_type), INTENT(IN) :: spl
       REAL(r8), DIMENSION(-1:1,0:spl%mx), INTENT(OUT) :: a
       REAL(r8), DIMENSION(spl%mx), INTENT(OUT) :: b
       REAL(r8), DIMENSION(4), INTENT(OUT) :: cl,cr
-      CHARACTER(*), INTENT(IN) :: endmode
+      INTEGER, INTENT(IN) :: endmode_int
 
       INTEGER :: j
 c-----------------------------------------------------------------------
@@ -682,8 +706,8 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     extrapolation boundary conditions.
 c-----------------------------------------------------------------------
-      SELECT CASE(endmode)
-      CASE("extrap")
+      SELECT CASE(endmode_int)
+      CASE(3)
          b=b*b
          cl(1)=(spl%xs(0)*(3*spl%xs(0)
      $        -2*(spl%xs(1)+spl%xs(2)+spl%xs(3)))
@@ -727,7 +751,7 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     not-a-knot boundary conditions.
 c-----------------------------------------------------------------------
-      CASE("not-a-knot")
+      CASE(4)
          b=b*b
          a(0,1)=a(0,1)+(spl%xs(2)+spl%xs(0)-2*spl%xs(1))*b(1)
          a(1,1)=a(1,1)+(spl%xs(2)-spl%xs(1))*b(1)
@@ -740,7 +764,7 @@ c-----------------------------------------------------------------------
 c-----------------------------------------------------------------------
 c     periodic boundary conditions.
 c-----------------------------------------------------------------------
-      CASE("periodic")
+      CASE(2)
          a(0,0:spl%mx:spl%mx)=2*(b(spl%mx)+b(1))
          a(1,0)=b(1)
          a(-1,0)=b(spl%mx)
@@ -750,7 +774,9 @@ c-----------------------------------------------------------------------
 c     unrecognized boundary condition.
 c-----------------------------------------------------------------------
       CASE DEFAULT
-         CALL program_stop("Cannot recognize endmode = "//TRIM(endmode))
+         PRINT *, "Error: Cannot recognize endmode_int = "
+     $    , endmode_int
+         CALL program_stop("Cannot recognize endmode")
       END SELECT
 c-----------------------------------------------------------------------
 c     terminate.
